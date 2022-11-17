@@ -81,10 +81,7 @@ function collectTemplates(dir, templates) {
     return templates;
 }
 
-const cluster = require("cluster");
-const cpuNum = require('os').cpus().length;
-
-function compileTemplates(input, output, packageName, options) {
+function compileTemplates(input, output) {
     return collectTemplates(input, []);
 
     var files = fs.readdirSync(input);
@@ -140,7 +137,7 @@ exports.compileTemplate = function(input, output, packageName, options) {
     require('mkdirp').sync(output);
     compileTemplate.apply(undefined, arguments);
 };
-exports.compileTemplates = function(input, output, packageName, options) {
+exports.compileTemplates = function(input, output) {
     if(!fs.existsSync(input)) {
         console.error(input + ' is not exists.');
         process.exit(1);

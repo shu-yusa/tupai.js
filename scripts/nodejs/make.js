@@ -10,8 +10,7 @@ var tupai = require(__dirname);
 const cluster = require("cluster");
 const cpuNum = require('os').cpus().length;
 
-exports.make = function(target, options) {
-    const tupaiConfig = tupai.getConfig();
+const postCompileCheck = (tupaiConfig, outputJs) => {
     const meOptions = {
         classPath: [
             tupaiConfig.sources,
@@ -20,56 +19,54 @@ exports.make = function(target, options) {
         ],
         output: path.join(tupaiConfig.gen, tupaiConfig.name + '.js')
     };
-    const outputJs = path.join(tupaiConfig.web, 'js', tupaiConfig.name + '.js');
+    console.log('gen configs:');
+    tupai.compileConfigSync(
+        tupaiConfig.configs,
+        tupaiConfig.genConfigs,
+        'Config'
+    );
+    console.log('consistency check: ');
+    tupai.merge('check', meOptions, function(code) {
+        // merge classes to one file
+        if (code === 0) {
+            console.log('    ok');
+        } else {
+            console.error('    ng', code);
+            return;
+        }
+        console.log('merge classes: ');
+        tupai.merge('merge', meOptions, function() {
+            const inputJs = meOptions.output;
+            // copy it
+            console.log('copy: ');
+            console.log('    ' + inputJs + ' -> ' + outputJs);
+            fs.createReadStream(inputJs).pipe(fs.createWriteStream(outputJs));
+        });
+    });
+};
+
+const doWorkerTask = (tupaiConfig) => {
     const callBack = {
-        onStdoutData: function(data) {
-            //console.log("    " + data.toString().split('\n')[0]);
-        },
-        end: function(code) {
-            console.log('INDEX:', process.env.processIndex);
-            if (process.env.processIndex === '0') {
-                if (code !== 0) {
-                    console.error('gen template files fails');
-                    return;
-                }
-                console.log('gen configs:');
-                tupai.compileConfigSync(
-                    tupaiConfig.configs,
-                    tupaiConfig.genConfigs,
-                    'Config'
-                );
-                console.log('consistency check: ');
-                tupai.merge('check', meOptions, function(code) {
-                    // merge classes to one file
-                    if (code === 0) {
-                        console.log('    ok');
-                    } else {
-                        console.error('    ng', code);
-                        return;
-                    }
-                    console.log('merge classes: ');
-                    tupai.merge('merge', meOptions, function() {
-                        const inputJs = meOptions.output;
-                        // copy it
-                        console.log('copy: ');
-                        console.log('    ' + inputJs + ' -> ' + outputJs);
-                        fs.createReadStream(inputJs).pipe(fs.createWriteStream(outputJs));
-                    });
-                });
-            }
+        onStdoutData: (data) => {},
+        end: (code) => {
+            cluster.worker.send(code);
         }
     };
+    JSON.parse(process.env.templates).forEach((template) => {
+        const packageName = template.replace(`${tupaiConfig.templates}/`, '').replace(/\.html$/, '').replace(/\//g, '.');
+        tupai.compileTemplate(template, tupaiConfig.genTemplates, packageName, callBack);
+    })
+};
+
+exports.make = function(target, options) {
+    const tupaiConfig = tupai.getConfig();
 
     if (cluster.isWorker) {
-        console.log("index:", process.env.processIndex);
-        JSON.parse(process.env.templates).forEach((template) => {
-            const packageName = template.replace(`${tupaiConfig.templates}/`, '').replace(/\.html$/, '').replace(/\//g, '.');
-            tupai.compileTemplate(template, tupaiConfig.genTemplates, packageName, callBack);
-        })
+        doWorkerTask(tupaiConfig);
         return;
     }
 
-    if(!tupai.isTupaiProjectDir()) {
+    if (!tupai.isTupaiProjectDir()) {
         console.error('current dir is not a tupai project dir.');
         return undefined;
     }
@@ -80,8 +77,9 @@ exports.make = function(target, options) {
         process.exit(1);
     }
 
-    var outputTupaiJs = path.join(tupaiConfig.web, 'js', 'tupai.min.js');
-    if(target === 'clean') {
+    const outputJs = path.join(tupaiConfig.web, 'js', tupaiConfig.name + '.js');
+    const outputTupaiJs = path.join(tupaiConfig.web, 'js', 'tupai.min.js');
+    if (target === 'clean') {
         console.log('unlink files:');
 
         [outputJs, outputTupaiJs].forEach(function(f) {
@@ -98,35 +96,43 @@ exports.make = function(target, options) {
 
     if (!fs.existsSync(outputTupaiJs)) {
         const fileName = target === 'debug' ? 'tupai-last.js' : 'tupai-last.min.js';
-        var tupaijs = path.join(__dirname, '..', '..', 'releases', 'web', fileName);
+        const tupaiJs = path.join(__dirname, '..', '..', 'releases', 'web', fileName);
         console.log('copy tupai.js:');
-        // fs.createReadStream(tupaijs).pipe(fs.createWriteStream(outputTupaiJs));
-        fs.symlinkSync(tupaijs, outputTupaiJs, 'file');
+        // fs.createReadStream(tupaiJs).pipe(fs.createWriteStream(outputTupaiJs));
+        fs.symlinkSync(tupaiJs, outputTupaiJs, 'file');
         console.log('    ' + outputTupaiJs);
     }
 
     console.log('gen template files:');
     console.log('    ' + tupaiConfig.templates + ' -> ' + tupaiConfig.genTemplates);
-    const templates = tupai.compileTemplates(tupaiConfig.templates, tupaiConfig.genTemplates, '', callBack);
-    console.log(templates);
 
-    options = callBack || {};
-    options.end ||= (code, url) => {};
-    options.end = (code, url) => {
-        if(code !== 0) {
-            options.end(0);
-        }
-        // processFile();
-    }
+    const templates = tupai.compileTemplates(tupaiConfig.templates, tupaiConfig.genTemplates);
 
     let parts = [];
-    const p = Math.ceil(templates.length / cpuNum);
+    const p = Math.floor(templates.length / cpuNum);
     for (let i = 0; i < cpuNum; i++) {
         parts[i] = templates.slice(p * i, Math.min(p * (i + 1), templates.length));
-        cluster.fork({
-            processIndex: i,
+    }
+    templates.splice(cpuNum * p).forEach((template, i) => {
+        parts[i].push(template);
+    });
+
+    const templateCount = templates.length;
+    let counter = 0;
+    for (let i = 0; i < cpuNum; i++) {
+        const worker = cluster.fork({
             templates: JSON.stringify(parts[i]),
-        }).on("message", msg => console.log("HELLO"));
+        });
+        worker.on('message', (code) => {
+            if (code !== 0) {
+                throw new Error("Failed to compile template");
+            }
+            counter += 1;
+            if (counter === templateCount) {
+                postCompileCheck(tupaiConfig, outputJs)
+                cluster.disconnect();
+            }
+        })
     }
 }
 
