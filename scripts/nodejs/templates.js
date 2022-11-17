@@ -33,7 +33,7 @@ function compileTemplate(url, output, packageName, options) {
         });
     }
 
-    if(needMinify) {
+    if (needMinify) {
         var html = require('html-minifier').minify(data.toString(), {
             removeComments: true,
             collapseWhitespace: true,
@@ -65,10 +65,32 @@ function compileTemplate(url, output, packageName, options) {
 
 }
 
+function collectTemplates(dir, templates) {
+    const files = fs.readdirSync(dir);
+    files.forEach(function(f) {
+        const filePath = path.join(dir, f);
+        const stat = fs.statSync(filePath);
+        if (stat.isDirectory()) {
+            collectTemplates(filePath, templates)
+        } else {
+            if (f.endsWith('.html')) {
+                templates.push(filePath);
+            }
+        }
+    })
+    return templates;
+}
+
+const cluster = require("cluster");
+const cpuNum = require('os').cpus().length;
+
 function compileTemplates(input, output, packageName, options) {
+    return collectTemplates(input, []);
 
     var files = fs.readdirSync(input);
     if(!files) return;
+    // templates/admin/AclTemplates.html gen/templates admin.AclTemplates
+    // templates/admin/AclTemplates.html gen/templates admin.AclTemplates
 
     options = options || {};
 
@@ -124,6 +146,6 @@ exports.compileTemplates = function(input, output, packageName, options) {
         process.exit(1);
     }
     require('mkdirp').sync(output);
-    compileTemplates.apply(undefined, arguments);
+    return compileTemplates.apply(undefined, arguments);
 };
 
