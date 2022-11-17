@@ -2,13 +2,12 @@
  * @author <a href='bocelli.hu@gmail.com'>bocelli.hu</a>
  * @since tupai.js 0.1
  */
-var fs = require('fs');
-var path = require('path');
-var ejs = require('ejs');
-var mkdirp = require('mkdirp').sync;
-var tupai = require(__dirname);
-const cluster = require("cluster");
-const cpuNum = require('os').cpus().length;
+const fs = require('fs');
+const path = require('path');
+const ejs = require('ejs');
+const mkdirp = require('mkdirp').sync;
+const tupai = require(__dirname);
+const EventEmitter = require('events');
 
 const postCompileCheck = (tupaiConfig, outputJs) => {
     const meOptions = {
@@ -45,26 +44,8 @@ const postCompileCheck = (tupaiConfig, outputJs) => {
     });
 };
 
-const doWorkerTask = (tupaiConfig) => {
-    const callBack = {
-        onStdoutData: (data) => {},
-        end: (code) => {
-            cluster.worker.send(code);
-        }
-    };
-    JSON.parse(process.env.templates).forEach((template) => {
-        const packageName = template.replace(`${tupaiConfig.templates}/`, '').replace(/\.html$/, '').replace(/\//g, '.');
-        tupai.compileTemplate(template, tupaiConfig.genTemplates, packageName, callBack);
-    })
-};
-
 exports.make = function(target, options) {
     const tupaiConfig = tupai.getConfig();
-
-    if (cluster.isWorker) {
-        doWorkerTask(tupaiConfig);
-        return;
-    }
 
     if (!tupai.isTupaiProjectDir()) {
         console.error('current dir is not a tupai project dir.');
@@ -108,31 +89,28 @@ exports.make = function(target, options) {
 
     const templates = tupai.compileTemplates(tupaiConfig.templates, tupaiConfig.genTemplates);
 
-    let parts = [];
-    const p = Math.floor(templates.length / cpuNum);
-    for (let i = 0; i < cpuNum; i++) {
-        parts[i] = templates.slice(p * i, Math.min(p * (i + 1), templates.length));
-    }
-    templates.splice(cpuNum * p).forEach((template, i) => {
-        parts[i].push(template);
-    });
-
-    const templateCount = templates.length;
+    EventEmitter.setMaxListeners(templates.length);
+    const FINISH_EVENT = 'finished';
+    const eventEmitter = new EventEmitter();
     let counter = 0;
-    for (let i = 0; i < cpuNum; i++) {
-        const worker = cluster.fork({
-            templates: JSON.stringify(parts[i]),
+    eventEmitter.on(FINISH_EVENT, (code) => {
+        if (code !== 0) {
+            throw new Error("Failed to compile template");
+        }
+        counter += 1;
+        if (counter === templates.length) {
+            postCompileCheck(tupaiConfig, outputJs)
+        }
+
+    });
+    templates.forEach((template) => {
+        const packageName = template.replace(`${tupaiConfig.templates}/`, '').replace(/\.html$/, '').replace(/\//g, '.');
+        tupai.compileTemplate(template, tupaiConfig.genTemplates, packageName, {
+            onStdoutData: (data) => {},
+            end: (code) => {
+                eventEmitter.emit(FINISH_EVENT, code)
+            }
         });
-        worker.on('message', (code) => {
-            if (code !== 0) {
-                throw new Error("Failed to compile template");
-            }
-            counter += 1;
-            if (counter === templateCount) {
-                postCompileCheck(tupaiConfig, outputJs)
-                cluster.disconnect();
-            }
-        })
-    }
+    })
 }
 
