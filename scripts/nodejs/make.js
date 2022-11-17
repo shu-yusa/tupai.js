@@ -47,10 +47,13 @@ exports.make = function(target, options) {
        ],
        output: path.join(tupaiConfig.gen, tupaiConfig.name + '.js')
     };
-    var tupaijs = path.join(__dirname, '..', '..', 'releases', 'web', 'tupai-last.min.js');
-    console.log('copy tupai.js:');
-    fs.createReadStream(tupaijs).pipe(fs.createWriteStream(outputTupaiJs));
-    console.log('    ' + outputTupaiJs);
+    if (!fs.existsSync(outputTupaiJs)) {
+        var tupaijs = path.join(__dirname, '..', '..', 'releases', 'web', 'tupai-last.min.js');
+        console.log('copy tupai.js:');
+        // fs.createReadStream(tupaijs).pipe(fs.createWriteStream(outputTupaiJs));
+        fs.symlinkSync(tupaijs, outputTupaiJs, 'file');
+        console.log('    ' + outputTupaiJs);
+    }
 
     console.log('gen template files:');
     console.log('    ' + tupaiConfig.templates + ' -> ' + tupaiConfig.genTemplates);
@@ -81,24 +84,11 @@ exports.make = function(target, options) {
                 console.log('merge classes: ');
                 tupai.merge('merge', meOptions, function() {
                     var inputJs = meOptions.output;
-                    if(target === 'debug') {
-                        // copy it
-                        console.log('copy: ');
-                        console.log('    ' + inputJs + ' -> ' + outputJs);
-                        fs.createReadStream(inputJs)
-                        .pipe(fs.createWriteStream(outputJs));
-                    } else {
-                        // compress js file
-                        console.log('compress: ');
-                        console.log('    ' + inputJs + ' -> ' + outputJs);
-                        tupai.compress(
-                            inputJs,
-                            {
-                                type: 'js',
-                                output: outputJs
-                            }
-                        );
-                    }
+                    // copy it
+                    console.log('copy: ');
+                    console.log('    ' + inputJs + ' -> ' + outputJs);
+                    fs.createReadStream(inputJs)
+                    .pipe(fs.createWriteStream(outputJs));
                 });
             });
         }

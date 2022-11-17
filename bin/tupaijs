@@ -97,14 +97,6 @@ program
 });
 
 program
-.command('compress [file]')
-.option('-t, --type <js|css>', 'Specifies the type of the input file')
-.option('-o, --output <output>', 'Place the output into <file>. Defaults to stdout.')
-.action(function(file, options) {
-    tupai.compress(file, options);
-});
-
-program
 .command('new <name>')
 .option('-p, --package <packageName>', 'package name')
 .action(function(name, options) {

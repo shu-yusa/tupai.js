@@ -176,28 +176,6 @@ exports.merge = function(action, options, end) {
     autoMerge.run(options, end);
 };
 
-exports.compress = function(file, options, execOptions) {
-    options = options || {};
-    var type = options.type || 'js';
-    var jarPath = require('yuicompressor').jar;
-    var pargs = ['-jar', jarPath, '--type', type];
-    if(options.output) {
-        pargs.push('-o', options.output);
-    }
-
-    if(file) {
-        pargs.push(file);
-    } else {
-        // need stdin
-        execOptions = execOptions || {};
-        if(!execOptions.hasOwnProperty('needStdin')) {
-            execOptions['needStdin'] = true;
-        }
-    }
-    //if(args) { pargs = pargs.concat(args); }
-    execute('java', pargs, execOptions);
-};
-
 var server = require(path.join(__dirname, 'server'));
 exports.startServer = server.start;
 
