@@ -48,7 +48,8 @@ exports.make = function(target, options) {
        output: path.join(tupaiConfig.gen, tupaiConfig.name + '.js')
     };
     if (!fs.existsSync(outputTupaiJs)) {
-        var tupaijs = path.join(__dirname, '..', '..', 'releases', 'web', 'tupai-last.min.js');
+        const fileName = target === 'debug' ? 'tupai-last.js' : 'tupai-last.min.js';
+        var tupaijs = path.join(__dirname, '..', '..', 'releases', 'web', fileName);
         console.log('copy tupai.js:');
         // fs.createReadStream(tupaijs).pipe(fs.createWriteStream(outputTupaiJs));
         fs.symlinkSync(tupaijs, outputTupaiJs, 'file');
