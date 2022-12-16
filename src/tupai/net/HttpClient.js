@@ -101,12 +101,12 @@ Package('tupai.net')
         }
         return data;
     },
-    _getResponseFromXhr: function(xhr, responseText) {
+    _getResponseFromXhr: function(xhr) {
         return {
             header: xhr.getAllResponseHeaders(),
             status: xhr.status,
             statusText: xhr.statusText,
-            responseText: responseText
+            responseText: xhr.responseText
         };
     },
     _execute: function(request, delegate) {
@@ -137,7 +137,7 @@ Package('tupai.net')
         return cp.HttpUtil.ajax(
             url,
             function(responseText, xhr) {
-                var response = THIS._getResponseFromXhr(xhr, responseText);
+                var response = THIS._getResponseFromXhr(xhr);
                 delegate &&
                 delegate.didHttpRequestSuccess &&
                 delegate.didHttpRequestSuccess(response, request);

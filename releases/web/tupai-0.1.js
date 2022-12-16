@@ -72,7 +72,7 @@
         var cp = packageObj._classProvider;
         if(cp[className]) return;
 
-        var classObj = findClass(nameArr)
+        var classObj = findClass(nameArr);
         if(!classObj) {
 
             // add to waitQueue
@@ -185,6 +185,16 @@
                     var className = arg1;
                     var callback = arg2;
                     var obj = ((typeof callback !== 'function') ? callback : callback(This._classProvider));
+                    if (obj.prototype) {
+                        if (!obj.__super) {
+                            obj.__super = global.Package.Class;
+                        }
+                        obj.prototype.__class = obj;
+                        obj.prototype.__className = This._packageName + '.' + className;
+                        obj.toString = function() {
+                            return this.prototype.__className;
+                        };
+                    }
                     This._packageObj[className] = obj;
                     This._classProvider[className] = obj;
                     This._classProvider.This = obj;
@@ -223,12 +233,15 @@
         return classObj;
     };
     BaseClass.extend = function(prototype, properties) {
-
         var parent = this;
         var extendedClass = createClass(prototype, properties);
 
         //extendedClass.prototype.__proto__ = parent.prototype;
         copy(extendedClass.prototype, parent.prototype, false);
+
+        if (this.prototype.__class) {
+            extendedClass.__super = this.prototype.__class;
+        }
 
         //extendedClass.prototype.SUPER = this.prototype;
         //extendedClass.SUPER = this;
@@ -3476,12 +3489,12 @@ Package('tupai.net')
         }
         return data;
     },
-    _getResponseFromXhr: function(xhr, responseText) {
+    _getResponseFromXhr: function(xhr) {
         return {
             header: xhr.getAllResponseHeaders(),
             status: xhr.status,
             statusText: xhr.statusText,
-            responseText: responseText
+            responseText: xhr.responseText
         };
     },
     _execute: function(request, delegate) {
@@ -3512,7 +3525,7 @@ Package('tupai.net')
         return cp.HttpUtil.ajax(
             url,
             function(responseText, xhr) {
-                var response = THIS._getResponseFromXhr(xhr, responseText);
+                var response = THIS._getResponseFromXhr(xhr);
                 delegate &&
                 delegate.didHttpRequestSuccess &&
                 delegate.didHttpRequestSuccess(response, request);

@@ -83,54 +83,6 @@ function collectTemplates(dir, templates) {
 
 function compileTemplates(input, output) {
     return collectTemplates(input, []);
-
-    var files = fs.readdirSync(input);
-    if(!files) return;
-    // templates/admin/AclTemplates.html gen/templates admin.AclTemplates
-    // templates/admin/AclTemplates.html gen/templates admin.AclTemplates
-
-    options = options || {};
-
-    var processFile = function() {
-        var file = files.shift();
-        //console.log('process ' + file);
-        if(!file) {
-            options.end && options.end(0);
-            return;
-        }
-        if(file.match(/^[a-zA-Z].*$/)) {
-            var p = path.join(input, file);
-            var stat = fs.statSync(p);
-
-            //console.log(file);
-            var op = {
-                minify: options.minify,
-                onStdoutData: options.onStdoutData,
-                onStderrData: options.onStderrData,
-                end: function(code, url) {
-                    if(code != 0) {
-                        options.end && options.end(0);
-                        return;
-                    }
-                    processFile();
-                }
-            };
-            if(stat.isDirectory()) {
-                var newPackageName = (packageName?(packageName+'.'+file):file);
-                compileTemplates(p, output, newPackageName, op);
-            } else if(stat.isFile() && file.match(/\.html$/)) {
-                var name = file.replace(/\.html$/, '');
-                var newPackageName = (packageName?(packageName+'.'+name):name);
-                compileTemplate(p, output, newPackageName, op);
-            } else {
-                processFile();
-            }
-        } else {
-            processFile();
-        }
-    };
-
-    processFile();
 }
 
 exports.compileTemplate = function(input, output, packageName, options) {

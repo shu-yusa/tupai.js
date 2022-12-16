@@ -101,7 +101,6 @@ exports.make = function(target, options) {
         if (counter === templates.length) {
             postCompileCheck(tupaiConfig, outputJs)
         }
-
     });
     templates.forEach((template) => {
         const packageName = template.replace(`${tupaiConfig.templates}/`, '').replace(/\.html$/, '').replace(/\//g, '.');
